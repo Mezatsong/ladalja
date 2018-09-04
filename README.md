@@ -16,7 +16,7 @@ MEZATSONG TSAFACK Carrel - [meztsacar@gmail.com](mailto:meztsacar@gmail.com)
 * You? ;) We're always open to improvements.
 
 ### Learning ladalja
-Ladalja has the most extensive and thorough documentation.
+Ladalja has the most extensive and thorough [documentation](https://github.com/Mezatsong/ladalja/releases/download/v1.0/doc.zip).
 	
 
 ## Licence
