@@ -4,16 +4,5 @@
   <artifactId>ladalja</artifactId>
   <version>1.0</version>
   <name>Ladalja</name>
-  <description>A Java API for database, the must simple to use</description>
-   
-  <dependencies>
-  		<!-- MySQL Connector 
-		<dependency>
-		    <groupId>mysql</groupId>
-		    <artifactId>mysql-connector-java</artifactId>
-		    <version>5.1.38</version>
-		</dependency>
-		-->
-  </dependencies>
-   
+  <description>A Java API for database, the must simple to use</description>  
 </project>
