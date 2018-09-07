@@ -89,6 +89,7 @@ public final class DB {
 			String database;
 			String username;
 			String password;
+			boolean isSQLite = false;
 			
 			try {
 				URL urlToConfigFile = new URL(CONFIG_FILE_URL);
@@ -100,22 +101,32 @@ public final class DB {
 				database = properties.getProperty( "DB_DATABASE" );
 				username = properties.getProperty( "DB_USERNAME" );
 				password = properties.getProperty( "DB_PASSWORD" );
+				isSQLite = connectionType.toLowerCase().equals("sqlite");
 			} catch (IOException e) {
 				throw new LadaljaException("Can't load config file: " + CONFIG_FILE_URL, e );
 			}
 			
-			String url = "jdbc:"+connectionType+"://"+host+":"+port+"/"+database;
-			try {
-				Class.forName( driver );
-			} catch ( ClassNotFoundException e ) {
-				throw new LadaljaException("Can't find driver: " + driver, e );
-			}
+			 String url = "jdbc:"+connectionType+"://"+host+":"+port+"/"+database;
+			 
+			 if(isSQLite){
+				 url = "jdbc:sqlite:"+database;
+				 try {
+					connect = DriverManager.getConnection(url);
+				} catch (SQLException e) {
+					throw new LadaljaException( e );
+				}
+			 }else{
 			
-			try {
-				connect = DriverManager.getConnection(url, username, password);
-			} catch (SQLException e) {
-				throw new LadaljaException(e);
-			}
+				try {
+					Class.forName( driver );
+					connect = DriverManager.getConnection(url, username, password);
+				} catch ( ClassNotFoundException e ) {
+					throw new LadaljaException("Can't find driver: " + driver, e );
+				}
+				 catch (SQLException e) {
+					throw new LadaljaException(e);
+				}
+			 }
 		}
 		
 		return connect;
