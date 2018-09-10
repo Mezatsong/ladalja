@@ -347,7 +347,7 @@ public final class DB {
 	/**
 	 * Enable transaction mode, it mean all query will be transactional
 	 */
-	public void enableTransaction()
+	public static void enableTransaction()
 	{
 		transactional = true;
 	}
@@ -355,7 +355,7 @@ public final class DB {
 	/**
 	 * Disable transaction mode
 	 */
-	public void disableTransaction()
+	public static void disableTransaction()
 	{
 		transactional = false;
 	}
