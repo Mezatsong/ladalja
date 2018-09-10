@@ -55,6 +55,8 @@ public final class DB {
 	private static List<QueryListener> queryListeners;
 	public static String CONFIG_FILE_URL;
 	
+	private static boolean transactional = true;
+	
 	private DB(){}
 	
 	
@@ -180,7 +182,11 @@ public final class DB {
 		Statement statement = null;
 		try{
 			statement = connection().createStatement();
-			statement.execute("BEGIN;");
+			boolean began = false;
+			if(transactional){
+				statement.execute("BEGIN;");
+				began = true;
+			}
 			
 			listen(query);
 			
@@ -194,8 +200,9 @@ public final class DB {
 				throw new LadaljaException("Insertion failled, please check your database constraints");
 			}
 					
-			
-			statement.execute("COMMIT;");
+			if(began){
+				statement.execute("COMMIT;");
+			}
 			
 			return result;
 			
@@ -252,9 +259,17 @@ public final class DB {
 		Statement statement = null;
 		try{
 			statement = connection().createStatement();
-			statement.execute("BEGIN;");
+			boolean began = false;
+			if(transactional){
+				statement.execute("BEGIN;");
+				began = true;
+			}
+			
 			statement.execute(query);
-			statement.execute("COMMIT;");
+			
+			if(began){
+				statement.execute("COMMIT;");
+			}
 		}catch(SQLException e){
 			if(statement != null)
 				try{
@@ -320,6 +335,32 @@ public final class DB {
 	}
 	
 	
+	/**
+	 * Check if transaction mode is enabled
+	 * @return true if enabled
+	 */
+	public static boolean isTransactional()
+	{
+		return transactional;
+	}
+
+	/**
+	 * Enable transaction mode, it mean all query will be transactional
+	 */
+	public void enableTransaction()
+	{
+		transactional = true;
+	}
+	
+	/**
+	 * Disable transaction mode
+	 */
+	public void disableTransaction()
+	{
+		transactional = false;
+	}
+	
+	
 	private static Object execute(String query, Object... params)  throws LadaljaException
 	{
 		boolean update = false;
@@ -343,11 +384,19 @@ public final class DB {
 			listen(query);
 			
 			Object obj = null;
+			boolean began = false; 
 			
 			if(update){
-				statement.execute("BEGIN;");
+				if(transactional){
+					statement.execute("BEGIN;");
+					began = true;
+				}
+				
 				obj = new Integer(statement.executeUpdate());
-				statement.execute("COMMIT;");
+				
+				if(began){
+					statement.execute("COMMIT;");
+				}
 			}else{
 				obj = statement.executeQuery();
 			}

@@ -190,8 +190,9 @@ public abstract class Model {
 		}
 		
 		Object primaryKey = data.get(getPrimaryKey());
+		boolean exist = primaryKey != null && newSuperQuery(getClass()).where(getPrimaryKey(),primaryKey).count() > 0;
 		
-		if( primaryKey == null ){
+		if( !exist ){ 
 			Model newCreatedInstance = create(this);	
 			set(getPrimaryKey(), newCreatedInstance.get(getPrimaryKey()) );
 		}else{
