@@ -4,7 +4,6 @@
 package io.github.mezatsong.ladalja;
 
 import java.io.IOException;
-import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -12,28 +11,38 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Properties;
+
+import io.github.mezatsong.ladalja.query.QueryBuilder;
+import io.github.mezatsong.ladalja.query.QueryListener;
 
 /**
  * Ladalja makes interacting with databases extremely simple across a variety of database backends using either raw SQL, the fluent query builder, and the model.<br>
  * DB is which one you will need if you do not use models<br>
- * Thus is you want to write raw SQL or using {@link io.github.mezatsong.ladalja.QueryBuilder}.<br>
+ * Thus is you want to write raw SQL or using {@link io.github.mezatsong.ladalja.query.QueryBuilder}.<br>
  * <p>
  * Before do any thing you will need to indicate where Ladalja config file is located, and in that file your config must look like:<br>
  * <p>
- * 	DB_DRIVER= driver_for_JDBC<br>
- *	DB_CONNECTION=database_connection_type<br>
- *	DB_HOST=host_where_is_located_database<br>
- *	DB_PORT=port<br>
- *	DB_DATABASE=database_name<br>
- *	DB_USERNAME=user_name_for_database<br>
- *	DB_PASSWORD=password_for_above_user_name<br>
+ * 	LADALJA_DRIVER= driver_for_JDBC<br>
+ *	LADALJA_CONNECTION=jdbc_database_connection_type (default is sqlite)<br>
+ *	LADALJA_HOST=host_where_is_located_database<br>
+ *	LADALJA_PORT=port<br>
+ *	LADALJA_DATABASE=database_name<br>
+ *	LADALJA_USERNAME=user_name_for_database<br>
+ *	LADALJA_PASSWORD=password_for_above_user_name<br>
  * <p>
- * All those properties must be present
- * to indicated, use the static public field of DB class named CONFIG_FILE_URL
- * like<br> 
- * DB.CONFIG_FILE_URL = "url_to_config_file"
+ * Or just this line
+ * <p>
+ * LADALJA_JDBC_URL=jdbc_url<br>
+ * </p>
+ * You can also do without the configuration file by specifying these properties on system properties, using java.lang.System.setProperty method
+ * All those properties must be present.<br>
+ * In order to indicate these properties, 
+ * use the static public field of DB class named CONFIG_FILE like<br> 
+ * DB.CONFIG_FILE = "path to config file"
+ * We will use ClassLoader.getSystemResourceAsStream(DB.CONFIG_FILE) to load it
  * <p>
  * after that you can use DB for anythings, for example if you want a raw select SQL query do like
  * DB.select("select * from users"); and it will return you a java.sql.ResultSet containing your query result.
@@ -42,9 +51,9 @@ import java.util.Properties;
  * {@link io.github.mezatsong.ladalja.DB#beginTransaction()} , {@link io.github.mezatsong.ladalja.DB#commit()} and {@link io.github.mezatsong.ladalja.DB#rollBack()} methods
  * <p>
  * If you want to start request using QueryBuilder, you just have to use {@link io.github.mezatsong.ladalja.DB#table(String)} method where the String 
- * parameter is the name of the table on which request will proceed, a new instance of {@link io.github.mezatsong.ladalja.QueryBuilder} will be returned.
+ * parameter is the name of the table on which request will proceed, a new instance of {@link io.github.mezatsong.ladalja.query.QueryBuilder} will be returned.
  * <p>
- * The is also something to listen each query Ladalja make through {@link io.github.mezatsong.ladalja.DB#register(io.github.mezatsong.ladalja.QueryListener)} .
+ * The is also something to listen each query Ladalja make through {@link io.github.mezatsong.ladalja.DB#register(io.github.mezatsong.ladalja.query.QueryListener)} .
  * 
  * @author MEZATSONG TSAFACK Carrel, meztsacar@gmail.com
  * 
@@ -53,7 +62,9 @@ public final class DB {
 
 	private static Connection connect;
 	private static List<QueryListener> queryListeners;
-	public static String CONFIG_FILE_URL;
+	public static String CONFIG_FILE;
+
+	private static boolean isInsertGetIdSupported = true;
 	
 	private static boolean transactional = true;
 	
@@ -61,7 +72,7 @@ public final class DB {
 	
 	
 	/**
-	 * Make new instance of {@link io.github.mezatsong.ladalja.QueryBuilder}
+	 * Make new instance of {@link io.github.mezatsong.ladalja.query.QueryBuilder}
 	 * @param tableName the name of the table on which request will proceed
 	 * @return Return new instance of query builder for building query.
 	 */
@@ -72,7 +83,6 @@ public final class DB {
 	}
 	
 	
-	
 	/**
 	 * Provide the connection object to database, using the configuration file properties
 	 * @return a java.sql.Connection instance which is used for querying, new instance will be loaded only the first time you call it or at the first querying
@@ -80,47 +90,41 @@ public final class DB {
 	 */
 	public static Connection connection() throws LadaljaException
 	{
-		if( connect == null)
+		if(connect == null)
 		{
 			
 			Properties properties = new Properties();
-			String driver;
-			String connectionType;
-			String host;
-			String port;
-			String database;
-			String username;
-			String password;
-			String serverTimezone;
-			String jdbcUrl;
-			boolean isSQLite = false;
+			
+			String serverTimezone = Calendar.getInstance().getTimeZone().getID();
 			
 			try {
-				URL urlToConfigFile = new URL(CONFIG_FILE_URL);
-				properties.load( urlToConfigFile.openStream() );
-			} catch (IOException e) {
+				properties.load( ClassLoader.getSystemResourceAsStream(CONFIG_FILE) );
+			} catch (NullPointerException e) {
 				properties = System.getProperties();
-				//throw new LadaljaException("Can't load config file: " + CONFIG_FILE_URL, e );
+			} catch (IOException e) {
+				throw new LadaljaException("Can't load config file: " + CONFIG_FILE, e );
 			}
 
-			driver = properties.getProperty( "LADALJA_DRIVER" );
-			connectionType = properties.getProperty( "LADALJA_CONNECTION", "sqlite" );
-			host = properties.getProperty( "LADALJA_HOST" );
-			port = properties.getProperty( "LADALJA_PORT" );
-			database = properties.getProperty( "LADALJA_DATABASE" );
-			username = properties.getProperty( "LADALJA_USERNAME" );
-			password = properties.getProperty( "LADALJA_PASSWORD" );
-			serverTimezone = properties.getProperty( "LADALJA_SERVER_TIME_ZONE", "UTC" );
-			jdbcUrl = properties.getProperty( "LADALJA_JDBC_URL", 
+			String connectionType = properties.getProperty( "LADALJA_CONNECTION", "sqlite" );
+			String driver = properties.getProperty( "LADALJA_DRIVER" );
+
+			String host = properties.getProperty( "LADALJA_HOST" );
+			String port = properties.getProperty( "LADALJA_PORT" );
+			String database = properties.getProperty( "LADALJA_DATABASE" );
+			String username = properties.getProperty( "LADALJA_USERNAME" );
+			String password = properties.getProperty( "LADALJA_PASSWORD" );
+			String jdbcUrl = properties.getProperty( "LADALJA_JDBC_URL", 
 				"jdbc:" + connectionType + "://" + host + ":" + port + "/" + database + "?serverTimezone=" + serverTimezone 
 			);
-			isSQLite = connectionType.toLowerCase().equals("sqlite");
+			boolean isSQLite = connectionType.toLowerCase().equals("sqlite");
 			
 			 
 			if (isSQLite) {
-				jdbcUrl = "jdbc:sqlite:"+database;
+				disableTransaction(); // SQLite does not support transaction
+				isInsertGetIdSupported = false; // SQLite does not support insertGetId
+				final String url = (jdbcUrl != null && !jdbcUrl.isEmpty()) ? jdbcUrl : "jdbc:sqlite:"+database;
 				try {
-					connect = DriverManager.getConnection(jdbcUrl);
+					connect = DriverManager.getConnection(url);
 				} catch (SQLException e) {
 					throw new LadaljaException( e );
 				}
@@ -140,6 +144,23 @@ public final class DB {
 		
 		return connect;
 	}
+
+
+	/**
+	 * Close the connection object to database if exist
+	 * @throws io.github.mezatsong.ladalja.LadaljaException if there is error while closing the connection
+	 */
+	public static void closeConnection() throws LadaljaException
+	{
+		try {
+			if (connect != null && connect.isClosed()) {
+				connect.close();
+			}
+		} catch (SQLException e) {
+			throw new LadaljaException(e);
+		}
+	}
+
 	
 	/**
 	 * Execute a SELECTs SQL query type, using prepared statement.
@@ -154,7 +175,7 @@ public final class DB {
 		if(!query.toLowerCase().contains("select")){
 			throw new LadaljaException("using non select sql query type in select method");
 		}
-		return (ResultSet) execute(query,params);
+		return (ResultSet) execute(query, params);
 	}
 	
 	
@@ -170,7 +191,7 @@ public final class DB {
 		if(!query.toLowerCase().contains("insert")){
 			throw new LadaljaException("using non insert sql query type in insert method");
 		}
-		return (Integer) execute(query,params);
+		return (Integer) execute(query, params);
 	}
 	
 	
@@ -181,7 +202,7 @@ public final class DB {
 	 * @return ID of new inserted row
 	 * @throws io.github.mezatsong.ladalja.LadaljaException if query is not SELECT type or id column doesn't exist
 	 */
-	public static long insertGetId(String query) throws LadaljaException
+	public static Object insertGetId(String query) throws LadaljaException
 	{
 		if(!query.toLowerCase().contains("insert")){
 			throw new LadaljaException("using non insert sql query type in insertGetId method");
@@ -195,19 +216,23 @@ public final class DB {
 				began = true;
 			}
 			
-			listen(query);
+			listenQuery(query);
 			
 			int statut = statement.executeUpdate(query, Statement.RETURN_GENERATED_KEYS);
+
+			listenUpdatedRows(query, statut);
 			
-			long result = 0;
+			Object result = 0;
 			ResultSet rs = statement.getGeneratedKeys();
-			if(statut > 0 && rs.next()){
-				result = rs.getLong(1);
-			}else{
+			listenResultSet(query, rs);
+
+			if (statut > 0 && rs.next()) {
+				result = rs.getObject(1);
+			} else {
 				throw new LadaljaException("Insertion failled, please check your database constraints");
 			}
 					
-			if(began){
+			if (began) {
 				statement.execute("COMMIT;");
 			}
 			
@@ -262,7 +287,7 @@ public final class DB {
 	 */
 	public static void statement(String query) throws LadaljaException
 	{
-		listen(query);
+		listenQuery(query);
 		Statement statement = null;
 		try{
 			statement = connection().createStatement();
@@ -288,8 +313,8 @@ public final class DB {
 	
 	
 	/**
-	 * Register a {@link io.github.mezatsong.ladalja.QueryListener} to DB for listening each query before execute it.
-	 * @param queryListener {@link io.github.mezatsong.ladalja.QueryListener}  to register
+	 * Register a {@link io.github.mezatsong.ladalja.query.QueryListener} to DB for listening each query before execute it.
+	 * @param queryListener {@link io.github.mezatsong.ladalja.query.QueryListener}  to register
 	 */
 	public static void register(QueryListener queryListener)
 	{
@@ -351,6 +376,16 @@ public final class DB {
 		return transactional;
 	}
 
+	
+	/**
+	 * Check if InsertGetId is supported
+	 * @return true if enabled
+	 */
+	public static boolean isInsertGetIdSupported()
+	{
+		return isInsertGetIdSupported;
+	}
+
 	/**
 	 * Enable transaction mode, it mean all query will be transactional
 	 */
@@ -371,11 +406,11 @@ public final class DB {
 	private static Object execute(String query, Object... params)  throws LadaljaException
 	{
 		boolean update = false;
-		String updateWord[] = {"DELETE","UPDATE","INSERT"};
+		String updateWord[] = {"DELETE", "UPDATE", "INSERT"};
 		PreparedStatement statement = null;
 		try {
 			for(String str: updateWord){
-				if(query.trim().replaceAll("\\s+", " ").split(" ")[0].toLowerCase().contains(str.toLowerCase())){
+				if (query.trim().replaceAll("\\s+", " ").split(" ")[0].toLowerCase().contains(str.toLowerCase())) {
 					update = true;
 				}
 			}
@@ -388,45 +423,68 @@ public final class DB {
 				}
 			}
 			
-			listen(query);
+			listenQuery(query);
 			
 			Object obj = null;
 			boolean began = false; 
 			
-			if(update){
-				if(transactional){
+			if (update) {
+				if (transactional) {
 					statement.execute("BEGIN;");
 					began = true;
 				}
 				
-				obj = Integer.valueOf(statement.executeUpdate());
+				int rows = statement.executeUpdate();
+				listenUpdatedRows(query, rows);
+				obj = Integer.valueOf(rows);
 				
-				if(began){
+				if (began) {
 					statement.execute("COMMIT;");
 				}
-			}else{
-				obj = statement.executeQuery();
+			} else {
+				ResultSet result = statement.executeQuery();
+				listenResultSet(query, result);
+				obj = result;
 			}
-		
 			
 			return obj;
 		} catch (SQLException e) {
-			if(statement != null && update)
+			if (statement != null && update) {
 				try {
 					statement.execute("ROLLBACK;");
 				} catch (SQLException e1) {}
+			}
 			throw new LadaljaException(e);
 		}
-
 	}
 	
 
-	private static void listen(String query)
+	private static void listenQuery(String query)
 	{
-		if(queryListeners != null)
-		{
-			for(QueryListener ql : queryListeners){
-				ql.listen(query);
+		if (queryListeners != null) {
+			for (QueryListener ql: queryListeners) {
+				ql.listenQuery(query);
+			}
+		}
+	}
+	
+	
+
+	private static void listenResultSet(String query, ResultSet result)
+	{
+		if (queryListeners != null) {
+			for (QueryListener ql: queryListeners) {
+				ql.listenResultSet(query, result);
+			}
+		}
+	}
+	
+
+	private static void listenUpdatedRows(String query, int rows)
+	{
+		if (queryListeners != null) {
+			for (QueryListener ql: queryListeners) {
+				ql.listenUpdatedRows(query, rows);
 			}
 		}
 	}

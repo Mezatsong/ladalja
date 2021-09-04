@@ -10,24 +10,24 @@ package io.github.mezatsong.ladalja;
  * @author MEZATSONG TSAFACK Carrel, meztsacar@gmail.com
  *
  */
- class LadaljaException extends RuntimeException {
+ public class LadaljaException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 
-	LadaljaException() {}
+	public LadaljaException() {}
 
 	
-	LadaljaException(String arg0) {
+	public LadaljaException(String arg0) {
 		super(arg0);
 	}
 
 	
-	LadaljaException(Throwable arg0) {
+	public LadaljaException(Throwable arg0) {
 		super(arg0);
 	}
 
 	
-	LadaljaException(String arg0, Throwable arg1) {
+	public LadaljaException(String arg0, Throwable arg1) {
 		super(arg0, arg1);
 	}
 

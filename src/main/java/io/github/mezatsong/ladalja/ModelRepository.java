@@ -2,38 +2,47 @@ package io.github.mezatsong.ladalja;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.mezatsong.ladalja.anotations.Column;
+import io.github.mezatsong.ladalja.anotations.Ignore;
+import io.github.mezatsong.ladalja.query.QueryBuilder;
+import io.github.mezatsong.ladalja.query.QueryBuilderORM;
+import io.github.mezatsong.ladalja.tools.Utils;
 
 
 
 /**
  * Ladalja provides a beautiful, simple ActiveRecord implementation for working with your database.<br> 
  * Each database table has a corresponding "Model" which is used to interact with that table. <br>
- * {@link ben.ladalja.Model} allow you to query for data in your tables, as well as insert new records into the table.<br>
+ * {@link ModelRepository.ladalja.Model} allow you to query for data in your tables, as well as insert new records into the table.<br>
  * <p>
- * To create a model, your model class must extends {@link ben.ladalja.Model}, and 
+ * To create a model, your model class must extends {@link ModelRepository.ladalja.Model}, and 
  * All field must be classes, thus use Integer instead of int
  * Do not use Character class, use String instead
  * You can use {@link ben.ladalja.Column} and {@link ben.ladalja.Ignore} annotations
  * To handle relationships, do not declare a model class into other, declare only method to set and get, in those methods you will use Ladalja relationships 
- * Redefine {@link ben.ladalja.Model#getTable()} to return the name of table that this model is being represented
- * Eventually override {@link ben.ladalja.Model#getPrimaryKey()} to return primary key column name, the default implementation return "id"
+ * Redefine {@link ModelRepository.ladalja.Model#getTable()} to return the name of table that this model is being represented
+ * Eventually override {@link ModelRepository.ladalja.Model#getPrimaryKey()} to return primary key column name, the default implementation return "id"
  * <p>
  * For example, let consider three classe, Game,User and Role<br>
- * User and Role have many to many relationship, thus User have and belongs to many Role and Role have and belongs to many User<br>
- * User have many game<br>
- * Game belong to one user<br>
+ * User and Role have many to many relationship, thus User have and belongs to many Roles and Role have and belongs to many Users<br>
+ * User have many Game<br>
+ * Game belong to one User<br>
  * <ul>
- * 	<li>The Game table is "game" (id,name,user_id)</li>
- * 	<li>The Role table is "role" (id,name)</li>
+ * 	<li>The Game table is "games" (id,name,user_id)</li>
+ * 	<li>The Role table is "roles" (id,name)</li>
  * 	<li>The User table is "users" (ID,name)</li>
- * 	<li>The User-Role relationship table is "role_users" (user_id,role_id)</li>
+ * 	<li>The User-Role relationship table is "role_user" (user_id,role_id)</li>
  * </ul>
  * <br>
  * An example of implementations of this situation can be like that
@@ -53,7 +62,7 @@ import java.util.Map;
  *		}
  *	
  *		public User getUser() {
- *			return belongsTo(User.class, "user_id"); //see {@link ben.ladalja.Model#belongsTo(Class, String)} for details
+ *			return belongsTo(User.class, "user_id"); //see {@link ModelRepository.ladalja.Model#belongsTo(Class, String)} for details
  *		}
  * 
  *		public Long getId() { //public void long getId()... will not work use class like you are seeing
@@ -82,12 +91,12 @@ import java.util.Map;
  *		}
  *		
  *		public List&lt;User&gt; getUsers() {
- *			return belongsToMany(User.class, "role_users", "user_id", "role_id"); //see {@link ben.ladalja.Model#belongsToMany(Class, String, String, String)} for details
+ *			return belongsToMany(User.class, "role_user", "user_id", "role_id"); //see {@link ModelRepository.ladalja.Model#belongsToMany(Class, String, String, String)} for details
  *		}
  *		
  *		public void setUsers(List&lt;User&gt; users) {
  *			for(User user : users)
- *				attach("user_roles", "role_id", "user_id", user); //see {@link ben.ladalja.Model#attach(String, String, String, Model)} for details
+ *				attach("user_roles", "role_id", "user_id", user); //see {@link ModelRepository.ladalja.Model#attach(String, String, String, ModelRepository)} for details
  *		}
  *
  *		//Other getters and setters
@@ -107,21 +116,21 @@ import java.util.Map;
  *		}
  *
  *		<code>@Override</code>
- *		protected String getPrimaryKey(){	//primary key is not "id", so we have to indicated it
+ *		protected String getPrimaryKey(){	//primary key is not "id", so we have to indicate it
  *			return "ID";
  *		}
  *		
  *		public List&lt;Game&gt; getGames() {
- *			return this.hasMany(Game.class, "user_id"); //see {@link ben.ladalja.Model#hasMany(Class, String)} for details
+ *			return this.hasMany(Game.class, "user_id"); //see {@link ModelRepository.ladalja.Model#hasMany(Class, String)} for details
  *		}
  *
  *		public List&lt;Role&gt; getRoles() {
- *			return this.belongsToMany(Role.class, "role_users", "role_id", "user_id");
+ *			return this.belongsToMany(Role.class, "role_user", "role_id", "user_id");
  *		}
  *		
  *		public void setGames(List&lt;Game&gt; games) {
  *			for(Game game : games)
- *				game = associate(game,"user_id"); //see {@link ben.ladalja.Model#associate(Model, String)} for details
+ *				game = associate(game,"user_id"); //see {@link ModelRepository.ladalja.Model#associate(ModelRepository, String)} for details
  *		}
  *
  *		//Other getters and setters
@@ -140,17 +149,17 @@ import java.util.Map;
  *  <p>
  *  You can have detail in used method in example here : 
  *  <ul>
- *  	<li>{@link ben.ladalja.Model#find(Class, Object)}</li>
- *  	<li>{@link ben.ladalja.Model#where(String, String, Object)}</li>
- *  	<li>{@link ben.ladalja.Model#where(String, Object)}</li>
- *  	<li>{@link ben.ladalja.Model#first(Class)}</li>
+ *  	<li>{@link ModelRepository.ladalja.Model#find(Class, Object)}</li>
+ *  	<li>{@link ModelRepository.ladalja.Model#where(String, String, Object)}</li>
+ *  	<li>{@link ModelRepository.ladalja.Model#where(String, Object)}</li>
+ *  	<li>{@link ModelRepository.ladalja.Model#first(Class)}</li>
  *  </ul>
  *  
  * @author MEZATSONG TSAFACK Carrel, meztsacar@gmail.com
  * 
  */
 @SuppressWarnings({"rawtypes","unchecked"})
-public abstract class Model {
+public abstract class ModelRepository {
 
 	//protected static String table;
 	//protected static Class<? extends Model> model;
@@ -161,7 +170,9 @@ public abstract class Model {
 	 * Override this to specified the model database table.
 	 * @return name of database table that this model is being represented.
 	 */
-	protected abstract String getTable();
+	public String getTable() {
+		return Utils.makePlural(this.getClass().getSimpleName().toLowerCase());
+	}
 	
 	
 	/**
@@ -170,8 +181,7 @@ public abstract class Model {
 	 * The default implementation return "id".
 	 * @return the name of column representing the primary key
 	 */
-	protected String getPrimaryKey()
-	{
+	protected String getPrimaryKey() {
 		return "id";
 	}
 	
@@ -179,12 +189,11 @@ public abstract class Model {
 	/**
 	 * To create a new record in the database, create a new model instance, set attributes on the model, then call the save method.
 	 * The save method may also be used to update models that already exist in the database. 
-	 * To update a model, you should retrieve it, set any attributes you wish to update, and then call the  save method
+	 * To update a model, you should retrieve it, set any attributes you wish to update, and then call the save method
 	 */
-	public void save()
-	{
+	public void save() {
 		Map<String,Object> data = mapping(this); 
-		if(!data.containsKey(getPrimaryKey())){
+		if(!data.containsKey(getPrimaryKey())) {
 			throw new LadaljaException("Primary key is not present : "+getPrimaryKey()+" is not present");
 		}
 		
@@ -192,14 +201,14 @@ public abstract class Model {
 		boolean exist = primaryKey != null && newSuperQuery(getClass()).where(getPrimaryKey(),primaryKey).count() > 0;
 		
 		if( !exist ){ 
-			Model newCreatedInstance = create(this);	
-			set(getPrimaryKey(), newCreatedInstance.get(getPrimaryKey()) );
+			ModelRepository newCreatedInstance = create(this);
+			set(getPrimaryField().getName(), newCreatedInstance.get(getPrimaryField().getName()) );
 		}else{
 			data.remove( getPrimaryKey() );
 			newSuperQuery(getClass()).where(getPrimaryKey(),primaryKey).update(data);
 		}
 	}
-	
+
 	
 	/**
 	 * Call this method on a model instance to delete a model.
@@ -224,7 +233,7 @@ public abstract class Model {
 	
 	/* ==================== PRIVATE METHOD ================== */
 	
-	private static String getTable(Class<? extends Model> model)
+	private static String getTable(Class<? extends ModelRepository> model)
 	{
 		try {
 			return model.getDeclaredConstructor().newInstance().getTable();
@@ -233,13 +242,30 @@ public abstract class Model {
 		}
 	}
 	
+
+	protected Field getPrimaryField() {
+		try {
+			return getClass().getDeclaredField(getPrimaryKey());
+		} catch (NoSuchFieldException e) {
+			for (Field pf: getClass().getDeclaredFields()) {
+				if (pf.isAnnotationPresent(Column.class)) {
+					if (pf.getAnnotation(Column.class).value().equals(getPrimaryKey())) {
+						return pf;
+					}
+				}
+			}
+		}
+
+		throw new LadaljaException("Can't find field linked with primary key column: " + getPrimaryKey());
+	}
 	
-	private static QueryBuilder newSuperQuery(Class<? extends Model> model)
+
+	private static QueryBuilder newSuperQuery(Class<? extends ModelRepository> model)
 	{
 		return DB.table(getTable(model));
 	}
 	
-	private static QueryBuilderORM newQuery(Class<? extends Model> model)
+	private static QueryBuilderORM newQuery(Class<? extends ModelRepository> model)
 	{
 		return new QueryBuilderORM(getTable(model));
 	}
@@ -249,43 +275,92 @@ public abstract class Model {
 		return new QueryBuilderORM();
 	}
 	
-	private static String toCaptitalize(String str)
-	{
-		if(str == null || str.length() < 1)
-			return str;
-		char tab[] = str.toCharArray();
-		tab[0] = String.valueOf(tab[0]).toUpperCase().charAt(0);
-		return String.valueOf(tab);
-	}
-	
 	
 	protected Object get(String fieldName)
 	{
-		String getter = "get" +	toCaptitalize(fieldName);
+		String getter = "get" +	Utils.toCaptitalize(fieldName);
 		try {
 			Method method = getClass().getDeclaredMethod(getter);
 			return method.invoke(this);
+		} catch (NoSuchMethodException e) {
+			throw new LadaljaException("Can't find getter (" + getter + ") for field : "+fieldName, e);
 		} catch (Exception e) {
-			throw new LadaljaException("error with : "+fieldName, e);
-		} 
+			throw new LadaljaException("Error with getter : "+getter, e);
+		}
 	}
-	
 	
 	
 	protected void set(String fieldName, Object value)
 	{
-		String setter = "set" +	toCaptitalize(fieldName);
+		if (value == null) {
+			return;
+		}
+
+		String setter = "set" +	Utils.toCaptitalize(fieldName);
 		try {
 			Field field = getClass().getDeclaredField(fieldName);
 			Method method = getClass().getDeclaredMethod(setter, field.getType());
-			method.invoke(this, value);
+			if (field.getType().getSuperclass() == Number.class || field.getType() == Number.class) {
+
+				if (field.getType() == Long.class) {
+					method.invoke(this, Long.valueOf(value.toString()));
+
+				} else if (field.getType() == Integer.class) {
+					method.invoke(this, Integer.valueOf(value.toString()));
+
+				} else if (field.getType() == Double.class) {
+					method.invoke(this, Double.valueOf(value.toString()));
+
+				} else if (field.getType() == Float.class) {
+					method.invoke(this, Float.valueOf(value.toString()));
+
+				} else if (field.getType() == Short.class) {
+					method.invoke(this, Short.valueOf(value.toString()));
+
+				} else if (field.getType() == BigInteger.class) {
+					method.invoke(this, BigInteger.valueOf(Long.valueOf(value.toString())));
+
+				} else if (field.getType() == BigDecimal.class) {
+					method.invoke(this, BigDecimal.valueOf(Double.valueOf(value.toString())));
+
+				} else {
+					method.invoke(this, field.getType().cast( (Number) value));
+				}
+
+
+			} else if (field.getType() == String.class) {
+				method.invoke(this, value.toString());
+
+			} else if (field.getType() == Date.class) {
+				if (value instanceof Number) {
+					method.invoke(this, new Date( Long.valueOf(value.toString()) ));
+				} else if (value instanceof Timestamp) {
+					method.invoke(this, new Date(((Timestamp) value).getTime()));
+				} else if (value instanceof Date) {
+					method.invoke(this, value);
+				} else {
+					method.invoke(this, Date.valueOf(value.toString()) );
+				}
+			} else if (field.getType() == Timestamp.class) {
+				if (value instanceof Number) {
+					method.invoke(this, new Timestamp( Long.valueOf(value.toString()) ));
+				} else if (value instanceof Date) {
+					method.invoke(this, new Timestamp(((Date) value).getTime()));
+				} else if (value instanceof Timestamp) {
+					method.invoke(this, value);
+				} else {
+					method.invoke(this, Timestamp.valueOf(value.toString()) );
+				}
+			} else {
+				method.invoke(this, field.getType().cast(value));
+			}
 		} catch (Exception e) {
 			throw new LadaljaException("error with : "+fieldName, e);
 		} 
 	}
 	
 
-	static <T extends Model> T mapping(ResultSet resultSet, Class<? extends Model> model)
+	public static <T extends ModelRepository> T mapping(ResultSet resultSet, Class<? extends ModelRepository> model)
 	{
 		T instance = null;
 		
@@ -320,10 +395,10 @@ public abstract class Model {
 		return instance;
 	}
 	
-	static <T extends Model> Map<String,Object> mapping(T instance)
+	static <T extends ModelRepository> Map<String,Object> mapping(T instance)
 	{
 		Map<String,Object> map = new HashMap<String,Object>();
-		Class<? extends Model> model = instance.getClass();
+		Class<? extends ModelRepository> model = instance.getClass();
 		Field fields[] = model.getDeclaredFields();
 		for(Field field : fields)
 		{	
@@ -338,7 +413,6 @@ public abstract class Model {
 			}
 			
 			map.put(databaseColumnName, instance.get(field.getName()));
-			
 		}
 		
 		return map;
@@ -367,9 +441,9 @@ public abstract class Model {
 	 * @param model the class which the result will be mapped into
 	 * @return the list of model object
 	 */
-	public static <T extends Model> List<T> all(Class<? extends Model> model)
+	public static <T extends ModelRepository> List<T> all(Class<? extends ModelRepository> model)
 	{
-		return get(model);
+		return newQuery(model).get(model);
 	}
 	
 	
@@ -379,7 +453,7 @@ public abstract class Model {
 	 * @param id its primary key
 	 * @return the model or null if nothing found
 	 */
-	public static <T extends Model> T find(Class<? extends Model> model, Object id)
+	public static <T extends ModelRepository> T find(Class<? extends ModelRepository> model, Object id)
 	{
 		try {
 			String primaryKey = model.getDeclaredConstructor().newInstance().getPrimaryKey();
@@ -395,7 +469,7 @@ public abstract class Model {
 	 * @param ids list of primary key
 	 * @return return a list of the matching records
 	 */
-	public static <T extends Model> List<T> find(Class<? extends Model> model, Object... ids)
+	public static <T extends ModelRepository> List<T> find(Class<? extends ModelRepository> model, Object... ids)
 	{
 		List<T> list = new ArrayList<T>();
 		if(ids != null){
@@ -417,9 +491,9 @@ public abstract class Model {
 	 * @return first result of the query
 	 * @throws LadaljaException if there no matching result
 	 */
-	public static <T extends Model> T findOrFail(Class<? extends Model> model, Object id)
+	public static <T extends ModelRepository> T findOrFail(Class<? extends ModelRepository> model, Object id)
 	{
-		T e = find(model,id);
+		T e = find(model, id);
 		if(e == null){
 			throw new LadaljaException("There is no row in table "+getTable(model)+" with "+id+" as id.");
 		}
@@ -434,7 +508,7 @@ public abstract class Model {
 	 * @return return a list of the matching records
 	 * @throws LadaljaException if there primary key in ids which has no result
 	 */
-	public static <T extends Model> List<T> findOrFail(Class<? extends Model> model, Object... ids)
+	public static <T extends ModelRepository> List<T> findOrFail(Class<? extends ModelRepository> model, Object... ids)
 	{
 		List<T> list = new ArrayList<T>();
 		if(ids != null){
@@ -453,40 +527,32 @@ public abstract class Model {
 	 * @param instance
 	 * @return return the new saved instance, with generated keys if there are
 	 */
-	public static <T extends Model> T create(T instance)
+	public static <T extends ModelRepository> T create(T instance)
 	{
-		Class<? extends Model> model = instance.getClass();
+		Class<? extends ModelRepository> model = instance.getClass();
 		
 		Map<String,Object> data = mapping(instance); 
-		
-		if( instance.getPrimaryKey().equals("id") )
-		{
-			long id = newSuperQuery(model).insertGetId(data);
+
+		Object primaryKey = data.get(instance.getPrimaryKey());
+
+		if (primaryKey == null && DB.isInsertGetIdSupported()) {
+			Object id = newSuperQuery(model).insertGetId(data);
 			return findOrFail(model, id);
-		}
-		else
-		{
-		
+		} else  {
 			newSuperQuery(model).insert(data);
-			Object primaryKey = data.remove(instance.getPrimaryKey());
 			QueryBuilderORM query = newQuery(model);
-			
-			if( primaryKey != null)
-			{
+			if (primaryKey != null) {
 				query.where(instance.getPrimaryKey(), primaryKey);
-			}
-			else
-			{
-				for(String key : data.keySet()){
+			} else {
+				data.remove(instance.getPrimaryKey());
+				for (String key : data.keySet()) {
 					query = query.where(key, data.get(key));
 				}
-				query.orderBy(instance.getPrimaryKey(), "desc");
+				query.orderBy(instance.getPrimaryKey(), "DESC");
 			}
 
 			return query.first(model);
-			
 		}
-		
 	}
 	
 	
@@ -497,7 +563,7 @@ public abstract class Model {
 	 * @param instance you want to create or update
 	 * @return return the saved instance
 	 */
-	public static <T extends Model> T updateOrCreate(T instance)
+	public static <T extends ModelRepository> T updateOrCreate(T instance)
 	{
 		instance.save();
 		return instance;
@@ -510,7 +576,7 @@ public abstract class Model {
 	 * @param model the class of model in which object will be deleted
 	 * @param primaryKeyValues list of primary key of objects you want to delete
 	 */
-	public static void destroy(Class<? extends Model> model, Object... primaryKeyValues)
+	public static void destroy(Class<? extends ModelRepository> model, Object... primaryKeyValues)
 	{
 		try {
 			String primaryKey = model.getDeclaredConstructor().newInstance().getPrimaryKey();
@@ -531,7 +597,7 @@ public abstract class Model {
 	/**
 	 * @see ben.ladalja.QueryBuilder#get()
 	 */
-	public static <T extends Model> List<T> get(Class<? extends Model> model) {
+	public static <T extends ModelRepository> List<T> get(Class<? extends ModelRepository> model) {
 		return newQuery(model).get(model);
 	}
 
@@ -539,7 +605,7 @@ public abstract class Model {
 	/**
 	 * @see ben.ladalja.QueryBuilder#first()
 	 */
-	public static <T extends Model> T first(Class<? extends Model> model) {
+	public static <T extends ModelRepository> T first(Class<? extends ModelRepository> model) {
 		return newQuery(model).first(model);
 	}
 
@@ -547,7 +613,7 @@ public abstract class Model {
 	/**
 	 * @see ben.ladalja.QueryBuilder#count()
 	 */
-	public static long count(Class<? extends Model> model) {
+	public static long count(Class<? extends ModelRepository> model) {
 		return newQuery(model).count();
 	}
 
@@ -555,32 +621,32 @@ public abstract class Model {
 	/**
 	 * @see ben.ladalja.QueryBuilder#max(java.lang.String)
 	 */
-	public static Double max(Class<? extends Model> model, String column) {
-		return newQuery(model).max(model,column);
+	public static Double max(Class<? extends ModelRepository> model, String column) {
+		return newQuery(model).max(column);
 	}
 
 
 	/**
 	 * @see ben.ladalja.QueryBuilder#min(java.lang.String)
 	 */
-	public static Double min(Class<? extends Model> model, String column) {
-		return newQuery(model).min(model,column);
+	public static Double min(Class<? extends ModelRepository> model, String column) {
+		return newQuery(model).min(column);
 	}
 
 
 	/**
 	 * @see ben.ladalja.QueryBuilder#avg(java.lang.String)
 	 */
-	public static Double avg(Class<? extends Model> model, String column) {
-		return newQuery(model).avg(model,column);
+	public static Double avg(Class<? extends ModelRepository> model, String column) {
+		return newQuery(model).avg(column);
 	}
 
 
 	/**
 	 * @see ben.ladalja.QueryBuilder#sum(java.lang.String)
 	 */
-	public static double sum(Class<? extends Model> model, String column) {
-		return newQuery(model).sum(model,column);
+	public static double sum(Class<? extends ModelRepository> model, String column) {
+		return newQuery(model).sum(column);
 	}
 
 
@@ -995,7 +1061,7 @@ public abstract class Model {
 	 * @param foreignKey the foreign key of the relationship
 	 * @return a new instance of relatedModel class or null
 	 */
-	public <T extends Model> T hasOne(Class<? extends Model> relatedModel, String foreignKey)
+	public <T extends ModelRepository> T hasOne(Class<? extends ModelRepository> relatedModel, String foreignKey)
 	{
 		try {
 			String relatedModelPrimaryKey = relatedModel.getDeclaredConstructor().newInstance().getPrimaryKey();
@@ -1029,12 +1095,12 @@ public abstract class Model {
 	 * We determines the foreign key of the relationship with the foreignKey argument
 	 * We assumes that the primary key of parent (retrieved with getPrimaryKey() method of parent) should have a value matching the foreign key of this object
 	 * Otherwise null will be returned (in case of there is no matching)
-	 * @see ben.ladalja.Model#hasOne(Class, String)
+	 * @see ModelRepository.ladalja.Model#hasOne(Class, String)
 	 * @param relatedModel the class of the related model
 	 * @param foreignKey the foreign key of the relationship
 	 * @return a new instance of relatedModel class or null
 	 */
-	public <T extends Model> T belongsTo(Class<? extends Model> relatedModel, String foreignKey)
+	public <T extends ModelRepository> T belongsTo(Class<? extends ModelRepository> relatedModel, String foreignKey)
 	{
 		try {
 			String relatedModelPrimaryKey = relatedModel.getDeclaredConstructor().newInstance().getPrimaryKey();
@@ -1055,9 +1121,9 @@ public abstract class Model {
 	 * @param foreignKey the foreign key of the relationship
 	 * @return list of matching objects
 	 */
-	public <T extends Model> List<T> hasMany(Class<? extends Model> relatedModel, String foreignKey)
+	public <T extends ModelRepository> List<T> hasMany(Class<? extends ModelRepository> relatedModel, String foreignKey)
 	{
-		return newQuery(relatedModel).where(foreignKey, get(getPrimaryKey())).get(relatedModel);
+		return newQuery(relatedModel).where(foreignKey, get(getPrimaryField().getName())).get(relatedModel);
 	}
 	
 	
@@ -1081,14 +1147,14 @@ public abstract class Model {
 	 * @param joiningForeignKey the name of primary key representing column of relatedModel class object is relationship's joining table
 	 * @return list of relatedModel object or empty list if there are no matching.
 	 */
-	public <T extends Model> List<T> belongsToMany(Class<? extends Model> relatedModel, 
+	public <T extends ModelRepository> List<T> belongsToMany(Class<? extends ModelRepository> relatedModel, 
 											String relationshipJoiningTable,
 											String foreignKey, 
 											String joiningForeignKey)
 	{
 		try{
 			List<Object> joiningPrimaryKeys = new ArrayList<Object>();
-			ResultSet resultSet = DB.table(relationshipJoiningTable).where(foreignKey, get(getPrimaryKey())).pluck(joiningForeignKey);
+			ResultSet resultSet = DB.table(relationshipJoiningTable).where(foreignKey, get(getPrimaryField().getName())).pluck(joiningForeignKey);
 			while(resultSet.next())
 			{
 				joiningPrimaryKeys.add( resultSet.getObject(joiningForeignKey) );
@@ -1115,7 +1181,7 @@ public abstract class Model {
 	 * @param foreignKey of the relationship
 	 * @return an updated instance
 	 */
-	public <T extends Model> T associate(T instance, String foreignKey)
+	public <T extends ModelRepository> T associate(T instance, String foreignKey)
 	{
 		if(instance.getClass().equals(getClass())){
 			throw new LadaljaException("Can't make relatonship with your self");
@@ -1138,7 +1204,7 @@ public abstract class Model {
 		if(!found){
 			throw new LadaljaException(foreignKey+" column or field not found in the attributes list");
 		}
-		instance.set(foreignKeyFieldName, get(getPrimaryKey()));
+		instance.set(foreignKeyFieldName, get(getPrimaryField().getName()));
 		instance.save();
 		return instance;
 	}
@@ -1147,16 +1213,18 @@ public abstract class Model {
 	
 	/**
 	 * To attach a model A to a model B by inserting a record in the intermediate table that joins the models
-	 * @see ben.ladalja.Model#belongsToMany(Class, String, String, String)
+	 * @see ModelRepository.ladalja.Model#belongsToMany(Class, String, String, String)
 	 * @param relationshipJoiningTable the name of relationship joining table
 	 * @param foreignKey the name of foreignKey in relationshipJoiningTable for this object
 	 * @param joiningForeignKey the name of foreignKey in relationshipJoiningTable for instance
 	 * @param instance the related model instance
 	 */
-	public <T extends Model> void attach(String relationshipJoiningTable,
-										String foreignKey, 
-										String joiningForeignKey,
-										T  instance)
+	public <T extends ModelRepository> void attach(
+		String relationshipJoiningTable,
+		String foreignKey, 
+		String joiningForeignKey,
+		T  instance
+	) 
 	{
 		if(instance == null){
 			return;
@@ -1170,8 +1238,8 @@ public abstract class Model {
 		
 		if(!existings.contains(instance)){
 			Map<String,Object> map = new HashMap<String,Object>();
-			map.put(foreignKey, get(getPrimaryKey()));
-			map.put(joiningForeignKey, instance.get(instance.getPrimaryKey()));
+			map.put(foreignKey, get(getPrimaryField().getName()));
+			map.put(joiningForeignKey, instance.get(instance.getPrimaryField().getName()));
 			DB.table(relationshipJoiningTable).insert(map);
 		}
 		
@@ -1186,7 +1254,7 @@ public abstract class Model {
 	 * @param joiningForeignKey the name of foreignKey in relationshipJoiningTable for instances model
 	 * @param instances the related model instances
 	 */
-	public <T extends Model> void detach(String relationshipJoiningTable,
+	public <T extends ModelRepository> void detach(String relationshipJoiningTable,
 										String foreignKey, 
 										String joiningForeignKey,
 										T... instances)
@@ -1202,9 +1270,9 @@ public abstract class Model {
 		for(T instance : instances)
 		{
 			DB.table(relationshipJoiningTable)
-								.where(foreignKey, get(getPrimaryKey()))
-									.where(joiningForeignKey, instance.get(instance.getPrimaryKey()))
-										.delete();
+				.where(foreignKey, get(getPrimaryField().getName()))
+					.where(joiningForeignKey, instance.get(instance.getPrimaryField().getName()))
+						.delete();
 		}
 	}
 	
@@ -1219,7 +1287,7 @@ public abstract class Model {
 	 * @param column column name of attribute
 	 * @return the value of column in the corresponding row in table
 	 */
-	public <T extends Model> Object pivot(String relationshipJoiningTable,
+	public <T extends ModelRepository> Object pivot(String relationshipJoiningTable,
 											String foreignKey, 
 											String joiningForeignKey,
 											T instance, 
@@ -1230,8 +1298,8 @@ public abstract class Model {
 		}
 		
 		return DB.table(relationshipJoiningTable)
-					.where(foreignKey, get(getPrimaryKey()))
-						.where(joiningForeignKey, instance.get(instance.getPrimaryKey()))
+					.where(foreignKey, get(getPrimaryField().getName()))
+						.where(joiningForeignKey, instance.get(instance.getPrimaryField().getName()))
 							.value(column);
 	}
 	
@@ -1244,7 +1312,7 @@ public abstract class Model {
 	 * @param instance the related model instance
 	 * @return Map<String,Object> containing the values with column name as key of each values
 	 */
-	public <T extends Model> Map<String,Object> pivot(String relationshipJoiningTable,
+	public <T extends ModelRepository> Map<String,Object> pivot(String relationshipJoiningTable,
 														String foreignKey, 
 														String joiningForeignKey,
 														T instance)
@@ -1254,8 +1322,8 @@ public abstract class Model {
 		}
 		
 		 return DB.table(relationshipJoiningTable)
-					.where(foreignKey, get(getPrimaryKey()))
-						.where(joiningForeignKey, instance.get(instance.getPrimaryKey()))
+					.where(foreignKey, get(getPrimaryField().getName()))
+						.where(joiningForeignKey, instance.get(instance.getPrimaryField().getName()))
 							.firstMap();
 	}
 	

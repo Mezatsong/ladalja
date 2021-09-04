@@ -1,7 +1,7 @@
 /**
  * 
  */
-package io.github.mezatsong.ladalja;
+package io.github.mezatsong.ladalja.query;
 
 import java.sql.Date;
 import java.sql.ResultSet;
@@ -11,6 +11,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.github.mezatsong.ladalja.DB;
+import io.github.mezatsong.ladalja.LadaljaException;
 
 /**
  * 
@@ -77,7 +80,7 @@ public class QueryBuilder<T extends QueryBuilder> {
 	
 	/* ----- CONSTRUCTOR -------- */
 	
-	QueryBuilder(String table) {
+	public QueryBuilder(String table) {
 		this.table = table;
 		selection = "*";
 		join = "";
@@ -395,7 +398,7 @@ public class QueryBuilder<T extends QueryBuilder> {
 	 * @param arg map of column names and values
 	 * @return The ID of new inserted row
 	 */
-	public Long insertGetId(Map<String,Object> arg)
+	public Object insertGetId(Map<String,Object> arg)
 	{
 		if(arg == null){
 			throw new LadaljaException("Null argument list");
@@ -424,7 +427,6 @@ public class QueryBuilder<T extends QueryBuilder> {
 		query = sloveAmbiguousColumn(query);
 		
 		return DB.insertGetId(query.trim());
-			
 	}
 	
 	
@@ -432,7 +434,7 @@ public class QueryBuilder<T extends QueryBuilder> {
 	 *  Update existing records using the update method. 
 	 *  The update method, like the insert method, accepts an array of column and value pairs containing the columns to be updated. 
 	 *  You may constrain the  update query using where clauses
-	 * @see io.github.mezatsong.ladalja.QueryBuilder#insert(Map)
+	 * @see io.github.mezatsong.ladalja.query.QueryBuilder#insert(Map)
 	 * @param arg the Map containing data
 	 */
 	public void update(Map<String,Object> arg)
@@ -1178,7 +1180,7 @@ public class QueryBuilder<T extends QueryBuilder> {
 	/**
 	 * The having methods may be used to group the query result
 	 *  The having method's signature is similar to that of the where method
-	 * @see io.github.mezatsong.ladalja.QueryBuilder#where(java.lang.String,java.lang.String,java.lang.Object) method
+	 * @see io.github.mezatsong.ladalja.query.QueryBuilder#where(java.lang.String,java.lang.String,java.lang.Object) method
 	 * @param column
 	 * @param operator
 	 * @param value
@@ -1232,7 +1234,7 @@ public class QueryBuilder<T extends QueryBuilder> {
 	
 	/**
 	 * Alternative for skip method
-	 * @see io.github.mezatsong.ladalja.QueryBuilder#skip(int)
+	 * @see io.github.mezatsong.ladalja.query.QueryBuilder#skip(int)
 	 * @param arg this object with new changes
 	 * @return this object with new changes
 	 */
